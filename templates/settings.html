@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Ayarlar — VidMind{% endblock %}
+{% block content %}
+
+<div style="max-width: 600px; margin: 40px auto; background: #1E293B; padding: 30px; border-radius: 12px; color: white;">
+  <h2>⚙️ Kullanıcı Ayarları</h2>
+  <p style="color: #94A3B8; font-size: 0.9rem; margin-bottom: 20px;">
+    Kendi OpenAI veya Abacus AI API anahtarınızı girerek sınırsız kişisel AI analizlerini kullanabilirsiniz. Kotanız tamamen size ait kalır.
+  </p>
+
+  <form method="POST" action="{{ url_for('settings') }}">
+    <div style="margin-bottom: 15px;">
+      <label style="display: block; margin-bottom: 5px; font-weight: 600;">Kişisel AI API Key:</label>
+      <input type="password" name="api_key" value="{{ current_key or '' }}" placeholder="sk-..." 
+        style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #0F172A; color: white;" />
+    </div>
+    <button type="submit" style="background: #6366F1; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 600;">
+      💾 Anahtarı Kaydet
+    </button>
+  </form>
+</div>
+
+{% endblock %}

@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Dashboard' if lang=='en' else 'Ana Sayfa' }} — YT Analiz{% endblock %}
+{% block content %}
+
+<div class="dashboard-header">
+  <div>
+    <h2>{{ 'Your Liked Videos' if lang=='en' else 'Beğenilen Videolarım' }}</h2>
+    <p class="subtitle">{{ total }} {{ 'video' if lang=='en' else 'video' }} | {{ stats|length }} {{ 'categories' if lang=='en' else 'kategori' }}</p>
+  </div>
+
+  {% if total == 0 %}
+  <a href="{{ url_for('fetch_videos') }}" class="btn-primary">
+    🔄 {{ 'Load Videos from YouTube' if lang=='en' else 'YouTube\'dan Videoları Yükle' }}
+  </a>
+  {% endif %}
+</div>
+
+<!-- İstatistik kartları -->
+{% if stats %}
+<div class="stats-grid">
+  {% for s in stats %}
+  {% set cat = categories.get(s.category, {'icon':'📌','color':'#6B7280'}) %}
+  <a href="{{ url_for('dashboard', category=s.category) }}" class="stat-card {% if selected_category == s.category %}stat-card-active{% endif %}"
+     style="border-color: {{ cat.color }}20;">
+    <span class="stat-icon">{{ cat.icon }}</span>
+    <div>
+      <div class="stat-name">{{ s.category }}</div>
+      <div class="stat-count" style="color:{{ cat.color }}">{{ s.count }}</div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Filtre & Arama -->
+<div class="filter-bar">
+  <form method="GET" action="{{ url_for('dashboard') }}" class="search-form">
+    <input type="hidden" name="category" value="{{ selected_category }}" />
+    <input type="text" name="search" value="{{ search }}" placeholder="{{ 'Search videos...' if lang=='en' else 'Video ara...' }}" class="search-input" />
+    <button type="submit" class="btn-search">🔍</button>
+  </form>
+
+  <div class="category-pills">
+    <a href="{{ url_for('dashboard') }}" class="pill {% if selected_category == 'Tümü' %}pill-active{% endif %}">
+      {{ 'All' if lang=='en' else 'Tümü' }}
+    </a>
+    {% for cat_name, cat_info in categories.items() %}
+    <a href="{{ url_for('dashboard', category=cat_name) }}"
+       class="pill {% if selected_category == cat_name %}pill-active{% endif %}"
+       style="{% if selected_category == cat_name %}background:{{ cat_info.color }};color:#fff;border-color:{{ cat_info.color }};{% endif %}">
+      {{ cat_info.icon }} {{ cat_name }}
+    </a>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Video grid -->
+{% if videos %}
+<div class="video-grid">
+  {% for video in videos %}
+  {% set cat = categories.get(video.category, {'icon':'📌','color':'#6B7280'}) %}
+  <a href="{{ url_for('video_detail', video_id=video.id) }}" class="video-card">
+    <div class="thumb-wrap">
+      {% if video.thumbnail %}
+      <img src="{{ video.thumbnail }}" alt="{{ video.title }}" class="thumb" loading="lazy" />
+      {% else %}
+      <div class="thumb-placeholder">▶</div>
+      {% endif %}
+      <span class="cat-badge" style="background:{{ cat.color }}">{{ cat.icon }} {{ video.category }}</span>
+    </div>
+    <div class="video-info">
+      <h3 class="video-title">{{ video.title }}</h3>
+      <p class="video-channel">{{ video.channel }}</p>
+      {% if video.summary %}
+      <p class="video-summary-preview">{{ video.summary[:80] }}...</p>
+      {% endif %}
+    </div>
+  </a>
+  {% endfor %}
+</div>
+
+{% elif total > 0 %}
+<div class="empty-state">
+  <p>🔍 {{ 'No results found.' if lang=='en' else 'Sonuç bulunamadı.' }}</p>
+  <a href="{{ url_for('dashboard') }}" class="btn-secondary">{{ 'Clear filters' if lang=='en' else 'Filtreleri temizle' }}</a>
+</div>
+
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon">📺</div>
+  <h3>{{ 'No videos yet' if lang=='en' else 'Henüz video yok' }}</h3>
+  <p>{{ 'Click the button below to load your liked videos from YouTube.' if lang=='en' else 'YouTube\'dan beğendiğiniz videoları yüklemek için aşağıdaki butona tıklayın.' }}</p>
+  <a href="{{ url_for('fetch_videos') }}" class="btn-primary" style="margin-top:1rem">
+    🔄 {{ 'Load Videos' if lang=='en' else 'Videoları Yükle' }}
+  </a>
+</div>
+{% endif %}
+
+{% endblock %}

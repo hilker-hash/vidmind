@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}VidMind — Akıllı Video Asistanı{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+{% if session.get('user') %}
+<nav class="navbar" style="background: #0F172A; border-bottom: 1px solid #1E293B;">
+  <a href="{{ url_for('dashboard') }}" class="nav-brand" style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: #6366F1; font-size: 1.2rem; text-decoration: none;">
+    <span style="background: #6366F1; color: white; padding: 4px 8px; border-radius: 6px; font-size: 0.9rem;">🧠</span>
+    <span>VidMind</span>
+  </a>
+  <div class="nav-links">
+    <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
+      🏠 {{ 'Ana Sayfa' if lang=='tr' else 'Home' }}
+    </a>
+    <a href="{{ url_for('notes') }}" class="nav-link {% if request.endpoint == 'notes' %}active{% endif %}">
+      📝 {{ 'Notlarım' if lang=='tr' else 'My Notes' }}
+    </a>
+    <a href="{{ url_for('settings') }}" class="nav-link {% if request.endpoint == 'settings' %}active{% endif %}">
+      ⚙️ {{ 'Ayarlar' if lang=='tr' else 'Settings' }}
+    </a>
+    <a href="{{ url_for('fetch_videos') }}" class="nav-link btn-refresh" style="background: #4F46E5; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none;">
+      🔄 {{ 'Yenile' if lang=='tr' else 'Refresh' }}
+    </a>
+    <div class="lang-switcher">
+      <a href="{{ url_for('set_lang', lang='tr') }}" class="{{ 'active-lang' if lang=='tr' else '' }}">TR</a>
+      |
+      <a href="{{ url_for('set_lang', lang='en') }}" class="{{ 'active-lang' if lang=='en' else '' }}">EN</a>
+    </div>
+    <div class="user-menu">
+      {% if session['user'].get('picture') %}
+      <img src="{{ session['user']['picture'] }}" alt="avatar" class="avatar" />
+      {% endif %}
+      <span class="user-name">{{ session['user']['name'] }}</span>
+      <a href="{{ url_for('logout') }}" class="btn-logout">{{ 'Çıkış' if lang=='tr' else 'Logout' }}</a>
+    </div>
+  </div>
+</nav>
+{% endif %}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="flash-container">
+    {% for category, message in messages %}
+    <div class="flash flash-{{ category }}">{{ message }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+{% endwith %}
+
+<main class="main-content">
+  {% block content %}{% endblock %}
+</main>
+
+<!-- Özgün Telifsiz İmzalı Alt Bilgi -->
+<footer style="text-align: center; padding: 25px 15px; margin-top: 50px; border-top: 1px solid rgba(255, 255, 255, 0.08); color: #9CA3AF; font-size: 0.85rem;">
+  <p>© 2026 VidMind Akıllı Video Analiz Platformu — Tüm Hakları Saklıdır.</p>
+  <p style="margin-top: 6px;">
+    Geliştirici: <strong style="color: #6366F1; font-weight: 600;">hi.copten</strong> 🚀
+  </p>
+</footer>
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

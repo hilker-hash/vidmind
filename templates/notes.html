@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}{{ 'My Notes' if lang=='en' else 'Notlarım' }} — YT Analiz{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h2>📝 {{ 'My Notes' if lang=='en' else 'Notlarım' }}</h2>
+  <p class="subtitle">{{ notes|length }} {{ 'notes' if lang=='en' else 'not' }}</p>
+</div>
+
+<!-- Yeni not ekle -->
+<div class="new-note-card">
+  <h3>{{ '+ Add New Note' if lang=='en' else '+ Yeni Not Ekle' }}</h3>
+  <form method="POST" action="{{ url_for('add_note') }}">
+    <textarea name="content" rows="4" class="note-textarea"
+      placeholder="{{ 'Write a free note (not related to a video)...' if lang=='en' else 'Serbest not yazın (video bağlamadan)...' }}"></textarea>
+    <button type="submit" class="btn-primary">
+      💾 {{ 'Save' if lang=='en' else 'Kaydet' }}
+    </button>
+  </form>
+</div>
+
+<!-- Tüm notlar -->
+{% if notes %}
+<div class="notes-grid">
+  {% for note in notes %}
+  <div class="note-card">
+    {% if note.video_title %}
+    <a href="{{ url_for('video_detail', video_id=note.video_id) }}" class="note-video-link">
+      📺 {{ note.video_title[:50] }}{% if note.video_title|length > 50 %}...{% endif %}
+    </a>
+    {% else %}
+    <span class="note-free-label">📌 {{ 'Free Note' if lang=='en' else 'Serbest Not' }}</span>
+    {% endif %}
+
+    <div class="note-body" id="note-body-{{ note.id }}">
+      <p class="note-content-text">{{ note.content }}</p>
+    </div>
+
+    <!-- Düzenleme formu -->
+    <form method="POST" action="{{ url_for('edit_note', note_id=note.id) }}"
+          id="edit-form-{{ note.id }}" class="edit-form" style="display:none;">
+      <textarea name="content" rows="3" class="note-textarea">{{ note.content }}</textarea>
+      <div class="edit-actions">
+        <button type="submit" class="btn-primary btn-sm">{{ 'Save' if lang=='en' else 'Kaydet' }}</button>
+        <button type="button" class="btn-secondary btn-sm" onclick="toggleEdit('{{ note.id }}')">{{ 'Cancel' if lang=='en' else 'İptal' }}</button>
+      </div>
+    </form>
+
+    <div class="note-footer">
+      <span class="note-date">{{ note.created_at[:16] }}</span>
+      <div class="note-actions">
+        <button class="btn-edit" onclick="toggleEdit('{{ note.id }}')">✏️</button>
+        <form method="POST" action="{{ url_for('delete_note', note_id=note.id) }}" style="display:inline;">
+          <button type="submit" class="btn-delete"
+            onclick="return confirm('{{ 'Delete this note?' if lang=='en' else 'Bu notu sil?' }}')">🗑</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon">📝</div>
+  <h3>{{ 'No notes yet' if lang=='en' else 'Henüz not yok' }}</h3>
+  <p>{{ 'Add notes from videos or write free notes above.' if lang=='en' else 'Video sayfalarından not ekleyebilir veya yukarıdan serbest not yazabilirsiniz.' }}</p>
+</div>
+{% endif %}
+
+<script>
+function toggleEdit(noteId) {
+  const body = document.getElementById(`note-body-${noteId}`);
+  const form = document.getElementById(`edit-form-${noteId}`);
+  if (form.style.display === 'none') {
+    body.style.display = 'none';
+    form.style.display = 'block';
+  } else {
+    body.style.display = 'block';
+    form.style.display = 'none';
+  }
+}
+</script>
+{% endblock %}
