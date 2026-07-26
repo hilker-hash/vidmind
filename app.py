@@ -1,3 +1,4 @@
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 import os
 import json
 import secrets
@@ -88,43 +89,38 @@ def google_login():
     return redirect(auth_url)
 
 
-@app.route("/callback")
+@app.route('/callback')
 def callback():
-    try:
-        state = session.get("oauth_state")
-        verifier = session.get("code_verifier")
-
-        flow = Flow.from_client_config(
-            CLIENT_CONFIG,
-            scopes=GOOGLE_SCOPES,
-            state=state,
-            redirect_uri="http://localhost:5000/callback"
-        )
+    if request.headers.get('X-Forwarded-Proto') == 'https':
+        request.environ['wsgi.url_scheme'] = 'https'
         
-        if verifier:
-            flow.code_verifier = verifier
+    state = session.get('state')
+    if not state or state != request.args.get('state'):
+        session.pop('state', None)
 
+    flow = get_google_oauth_flow()
+    try:
         flow.fetch_token(authorization_response=request.url)
-        credentials = flow.credentials
+    except Exception as e:
+        flash(f"Giriş hatası: {e}", "danger")
+        return redirect(url_for('login'))
 
-        # Kullanıcı bilgilerini al
-        oauth2_service = build("oauth2", "v2", credentials=credentials)
-        user_info = oauth2_service.userinfo().get().execute()
+    credentials = flow.credentials
+    session['credentials'] = {
+        'token': credentials.token,
+        'refresh_token': credentials.refresh_token,
+        'token_uri': credentials.token_uri,
+        'client_id': credentials.client_id,
+        'client_secret': credentials.client_secret,
+        'scopes': credentials.scopes
+    }
 
-        session["user"] = {
-            "email": user_info.get("email"),
-            "name": user_info.get("name"),
-            "picture": user_info.get("picture"),
-        }
-        session["credentials"] = {
-            "token": credentials.token,
-            "refresh_token": credentials.refresh_token,
-            "token_uri": credentials.token_uri,
-            "client_id": credentials.client_id,
-            "client_secret": credentials.client_secret,
-            "scopes": list(credentials.scopes) if credentials.scopes else [],
-        }
-        return redirect(url_for("dashboard"))
+    user_info = get_user_info(credentials)
+    session['user'] = user_info
+    init_db()
+
+    flash("Başarıyla giriş yapıldı!", "success")
+    return redirect(url_for('dashboard'))
 
     except Exception as e:
         flash(f"Giriş hatası: {str(e)}", "error")
