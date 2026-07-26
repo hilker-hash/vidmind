@@ -1,7 +1,12 @@
-os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 import os
 import json
 import secrets
+from functools import wraps
+
+# Google OAuth HTTPS ve Kapsam İzinleri
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
+
 from flask import (Flask, render_template, redirect, url_for,
                    session, request, jsonify, flash)
 from google_auth_oauthlib.flow import Flow
@@ -14,30 +19,52 @@ from ai_helper import categorize_video, generate_summary, ask_ai_chat
 from config import (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
                     GOOGLE_SCOPES, CATEGORIES)
 
-# Geliştirme ortamı için HTTP uyarısını devre dışı bırak
-os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
-
 app = Flask(__name__)
-# Sabit ve güvenli oturum anahtarı
-app.secret_key = "youtube-analiz-sabit-gizli-anahtar-12345"
+app.config['PREFERRED_URL_SCHEME'] = 'https'
+app.secret_key = os.getenv("SECRET_KEY", "vidmind-gizli-sabit-anahtar-9988")
 
 # Veritabanını başlat
 db.init_db()
 
-# Google OAuth akış ayarları
-CLIENT_CONFIG = {
-    "web": {
-        "client_id": GOOGLE_CLIENT_ID,
-        "client_secret": GOOGLE_CLIENT_SECRET,
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-        "token_uri": "https://oauth2.googleapis.com/token",
-        "redirect_uris": ["http://localhost:5000/callback"],
+
+def get_redirect_uri():
+    """Canlı sunucuda (HTTPS) veya lokalde doğru callback adresini dinamik üretir."""
+    return url_for('callback', _external=True, _scheme='https' if not app.debug else request.scheme)
+
+
+def get_google_oauth_flow(redirect_uri=None):
+    """Google OAuth Flow nesnesini dinamik redirect_uri ile oluşturur."""
+    client_config = {
+        "web": {
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+        }
     }
-}
+    flow = Flow.from_client_config(
+        client_config,
+        scopes=GOOGLE_SCOPES,
+        redirect_uri=redirect_uri or get_redirect_uri()
+    )
+    return flow
+
+
+def get_user_info(credentials):
+    """Google API kullanarak kullanıcının profil bilgilerini çeker."""
+    try:
+        service = build('oauth2', 'v2', credentials=credentials)
+        user_info = service.userinfo().get().execute()
+        return {
+            'email': user_info.get('email', ''),
+            'name': user_info.get('name', 'Kullanıcı'),
+            'picture': user_info.get('picture', '')
+        }
+    except Exception:
+        return {'email': 'kullanici@vidmind.com', 'name': 'Kullanıcı', 'picture': ''}
 
 
 def login_required(f):
-    from functools import wraps
     @wraps(f)
     def decorated(*args, **kwargs):
         if "user" not in session:
@@ -51,7 +78,7 @@ def get_lang():
 
 
 # ──────────────────────────────────────────────
-# ANA SAYFA
+# ANA SAYFA & GİRİŞ / ÇIKIŞ
 # ──────────────────────────────────────────────
 @app.route("/")
 def index():
@@ -60,22 +87,18 @@ def index():
     return redirect(url_for("login"))
 
 
-# ──────────────────────────────────────────────
-# GİRİŞ / ÇIKIŞ
-# ──────────────────────────────────────────────
 @app.route("/login")
 def login():
+    if "user" in session:
+        return redirect(url_for("dashboard"))
     return render_template("login.html", lang=get_lang())
 
 
 @app.route("/google-login")
 def google_login():
-    flow = Flow.from_client_config(
-        CLIENT_CONFIG,
-        scopes=GOOGLE_SCOPES,
-        redirect_uri="http://localhost:5000/callback"
-    )
-    
+    redirect_uri = get_redirect_uri()
+    flow = get_google_oauth_flow(redirect_uri=redirect_uri)
+
     verifier = flow.code_verifier or secrets.token_urlsafe(64)
     session["code_verifier"] = verifier
     flow.code_verifier = verifier
@@ -86,23 +109,32 @@ def google_login():
         prompt="consent"
     )
     session["oauth_state"] = state
+    session.modified = True
     return redirect(auth_url)
 
 
 @app.route('/callback')
 def callback():
+    # HTTPS Zorlaması
     if request.headers.get('X-Forwarded-Proto') == 'https':
         request.environ['wsgi.url_scheme'] = 'https'
-        
-    state = session.get('state')
-    if not state or state != request.args.get('state'):
-        session.pop('state', None)
 
-    flow = get_google_oauth_flow()
+    redirect_uri = get_redirect_uri()
+    flow = get_google_oauth_flow(redirect_uri=redirect_uri)
+
+    verifier = session.get('code_verifier')
+    if verifier:
+        flow.code_verifier = verifier
+
+    auth_resp = request.url
+    if auth_resp.startswith('http://') and not app.debug:
+        auth_resp = auth_resp.replace('http://', 'https://', 1)
+
     try:
-        flow.fetch_token(authorization_response=request.url)
+        flow.fetch_token(authorization_response=auth_resp)
     except Exception as e:
-        flash(f"Giriş hatası: {e}", "danger")
+        print(f"OAuth Fetch Token Hatası: {e}")
+        flash("Giriş oturumu yenilendi, lütfen tekrar giriş yapın.", "warning")
         return redirect(url_for('login'))
 
     credentials = flow.credentials
@@ -117,19 +149,15 @@ def callback():
 
     user_info = get_user_info(credentials)
     session['user'] = user_info
-    init_db()
 
-    flash("Başarıyla giriş yapıldı!", "success")
+    flash("Başarıyla giriş yapıldı! Hoş geldiniz. 🎉", "success")
     return redirect(url_for('dashboard'))
-
-    except Exception as e:
-        flash(f"Giriş hatası: {str(e)}", "error")
-        return redirect(url_for("login"))
 
 
 @app.route("/logout")
 def logout():
     session.clear()
+    flash("Oturum kapatıldı.", "info")
     return redirect(url_for("login"))
 
 
@@ -141,7 +169,7 @@ def set_lang(lang):
 
 
 # ──────────────────────────────────────────────
-# DASHBOARD
+# DASHBOARD & YOUTUBE İŞLEMLERİ
 # ──────────────────────────────────────────────
 @app.route("/dashboard")
 @login_required
@@ -225,7 +253,6 @@ def video_detail(video_id):
         flash("Video bulunamadı.", "error")
         return redirect(url_for("dashboard"))
 
-    notes = []
     conn = db.get_db()
     c = conn.cursor()
     c.execute("SELECT * FROM notes WHERE user_email = ? AND video_id = ? ORDER BY created_at DESC",
@@ -269,7 +296,6 @@ def summarize_video(video_id):
 @app.route("/video/<video_id>/chat", methods=["POST"])
 @login_required
 def chat_with_video(video_id):
-    """Kullanıcının kendi API key'i varsa onu kullanır, yoksa genel motor çalışır."""
     user = session["user"]
     video = db.get_video(video_id, user["email"])
 
@@ -352,7 +378,6 @@ def edit_note(note_id):
 @app.route("/settings", methods=["GET", "POST"])
 @login_required
 def settings():
-    """Kullanıcının kendi API key'ini kaydedebileceği alan."""
     user = session["user"]
     if request.method == "POST":
         custom_key = request.form.get("api_key", "").strip()
@@ -368,6 +393,6 @@ def settings():
 if __name__ == "__main__":
     print("=" * 50)
     print("🚀 VidMind Akıllı Video Analiz Uygulaması Başlatılıyor...")
-    print("📌 Tarayıcıdan açın: http://localhost:5000")
+    print("📌 Uygulama hazır!")
     print("=" * 50)
     app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
